@@ -1,0 +1,21 @@
+services:
+  slack-demo:
+    image: n8nio/n8n:2.45.7
+    container_name: comms-slack-demo
+    user: root
+    entrypoint: ["node", "/app/bridge.cjs"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./bridge.cjs:/app/bridge.cjs:ro
+      - ./private/config.json:/run/comms-private/config.json:ro
+      - slack_demo_data:/data
+    networks: [n8n_network]
+volumes:
+  slack_demo_data:
+networks:
+  n8n_network:
+    external: true
+    name: n8n_default

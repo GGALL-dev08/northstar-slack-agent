@@ -1,0 +1,912 @@
+{
+  "id": "CommsBackend2026",
+  "name": "COMMS 2 · Sorting & Backend",
+  "active": false,
+  "nodes": [
+    {
+      "id": "capture_intake_1",
+      "name": "Capture · Manual test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "outbox_outbox_0",
+      "name": "Outbox · Manual test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1150
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "capture_intake_2",
+      "name": "Capture · Example forwarded customer email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        520
+      ],
+      "parameters": {
+        "jsCode": "\nreturn [{json:{tenant_id:'northstar_demo',id:'manual-forward-'+$execution.id,source:'forwarded_email',channel:'email_forward',direction:'inbound',external:true,synthetic:true,body:'Could you send plan prices and explain the Enterprise SLA?',occurred_at:new Date().toISOString()}}];",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "capture_intake_3",
+      "name": "Capture · Normalize · exclude internal · detect sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        520
+      ],
+      "parameters": {
+        "jsCode": "function normalizeEvent(e) {\n  if(!e || typeof e.body !== 'string' || !e.body.trim() || e.body.length>100000) throw Error('A bounded message body is required');\n  if(e.tenant_id!=='northstar_demo' && e.transport_verified!==true) throw Error('Authenticated adapter required');\n  if(e.synthetic===true && e.tenant_id!=='northstar_demo') throw Error('Synthetic events cannot enter live tenants');\n  const channel=String(e.channel||'email');\n  const demo=e.tenant_id==='northstar_demo' && e.synthetic===true;\n  if(!demo && !e.transport_verified) throw Error('Transport not verified');\n  let direction=e.direction==='incoming'?'inbound':(e.direction||'inbound');\n  const external = channel==='slack' ? e.external_channel_verified===true : (demo ? e.external===true : e.recipient_policy_verified===true);\n  if(channel==='email_forward') direction='inbound';\n  return {...e,provenance:{source_provenance:e.provenance||null,from:e.from||null,to:e.to||null},body:external?e.body:'[Internal content excluded from external communications corpus]',source:e.source||channel,source_id:e.source_event_id||e.source_id||e.id,direction,\n    audience_class:external?'external':'internal',confirmed_sent:direction==='outbound' && e.confirmed_sent===true,\n    classification:!external?'internal_excluded':direction==='outbound'?'sent_style_candidate':'external_inbox',\n    human_approved:false,synthetic:demo};\n}\nreturn $input.all().map(i=>({json:normalizeEvent(i.json)}));",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "capture_intake_4",
+      "name": "Capture · Persist idempotent inbox + style candidate",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        960,
+        520
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT comms.ingest_event($1::jsonb) AS data;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      }
+    },
+    {
+      "id": "capture_intake_5",
+      "name": "Capture · Capture receipt — no heavy generation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        520
+      ],
+      "parameters": {
+        "jsCode": "\nreturn $input.all().map(i=>({json:i.json.data}));",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "capture_intake_6",
+      "name": "Capture · Slack source adapter — DISCONNECTED",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2950
+      ],
+      "parameters": {
+        "trigger": [
+          "message"
+        ],
+        "options": {}
+      },
+      "disabled": true
+    },
+    {
+      "id": "capture_intake_7",
+      "name": "Capture · Forwarded email adapter — DISCONNECTED",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        320,
+        2950
+      ],
+      "parameters": {
+        "options": {},
+        "format": "resolved",
+        "postProcessAction": "nothing"
+      },
+      "disabled": true
+    },
+    {
+      "id": "capture_intake_8",
+      "name": "Capture · LinkedIn approved export adapter — DISCONNECTED",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        640,
+        2950
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "comms-linkedin-import-disabled",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "disabled": true
+    },
+    {
+      "id": "outbox_outbox_2",
+      "name": "Outbox · Tenant-scoped review configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        1150
+      ],
+      "parameters": {
+        "jsCode": "\nreturn $input.all().map(i=>{const t=i.json.tenant_id||'northstar_demo';if(t!=='northstar_demo'&&!i.json.actor_id)throw Error('Operator required');return {json:{tenant_id:t,actor_id:i.json.actor_id||(t==='northstar_demo'?'demo_operator':null)}};});",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "outbox_outbox_3",
+      "name": "Outbox · Read held notifications and explicit actions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        960,
+        1150
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT comms.prepare_outbox($1::jsonb) AS data;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      }
+    },
+    {
+      "id": "outbox_outbox_4",
+      "name": "Outbox · Expand review items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        1150
+      ],
+      "parameters": {
+        "jsCode": "\nconst d=$json.data;return d.items.length?d.items.map(json=>({json})):[{json:{empty:true,status:'No pending output'}}];",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "outbox_outbox_5",
+      "name": "Outbox · Pending draft/action exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        1150
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.empty !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "outbox_outbox_6",
+      "name": "Outbox · Fetch draft and complete artifact metadata",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1920,
+        1150
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT comms.get_draft($1::jsonb) AS data;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify({tenant_id:$json.tenant_id,actor_id:$(\"Outbox · Tenant-scoped review configuration\").item.json.actor_id||\"demo_operator\",draft_id:$json.draft_id})] }}"
+        }
+      }
+    },
+    {
+      "id": "outbox_outbox_7",
+      "name": "Outbox · Build Slack review blocks + copyable text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        1500
+      ],
+      "parameters": {
+        "jsCode": "function reviewCard(d) {\n const clip=String(d.body||'').replace(/```/g,'` ` `');const value=JSON.stringify({draft_id:d.draft_id,revision_hash:d.revision_hash});\n const eligible=d.verification?.passed===true && d.status!=='blocked';\n const actions=[{type:'button',text:{type:'plain_text',text:'Save document'},action_id:'save_asset',value}];\n if(eligible)actions.push({type:'button',text:{type:'plain_text',text:'Approve this revision for sending'},action_id:'approve_send',value,confirm:{title:{type:'plain_text',text:'Send this revision?'},text:{type:'mrkdwn',text:'Confirm the destination and content before sending.'},confirm:{type:'plain_text',text:'Confirm'},deny:{type:'plain_text',text:'Cancel'}}});\n return {text:'Draft ready for review',copy_text:d.body,text_attachment:{filename:d.draft_id+'.txt',content:d.body},blocks:[{type:'header',text:{type:'plain_text',text:'Northstar Relay · review draft'}},{type:'section',text:{type:'mrkdwn',text:(eligible?'Model checks passed; human review required.':'UNVERIFIED / FIXTURE — sending blocked.')+'\\nMedium: '+d.channel}},{type:'section',text:{type:'mrkdwn',text:'```'+clip.slice(0,2800)+'```'}},{type:'context',elements:[{type:'mrkdwn',text:'Draft '+d.draft_id+' · revision '+d.revision_hash.slice(0,12)+' · full text attached when adapter connected. Use the code-block copy control where your Slack client supports it.'}]},{type:'actions',elements:actions}],draft_id:d.draft_id,revision_hash:d.revision_hash,dispatch_allowed:false};\n}\nreturn $input.all().map(i=>({json:{...reviewCard(i.json.data),draft:i.json.data,status:'held',delivered:false,reason:'Connect and verify Slack/folder/send adapters before enabling dispatch'},...(i.binary?{binary:i.binary}:{})}));",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "outbox_outbox_9",
+      "name": "Outbox · Every minute recovery — DISABLED until deployment",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        1150
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "outbox_outbox_10",
+      "name": "Outbox · Post review to Slack — DISCONNECTED",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        960,
+        2950
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ JSON.stringify($json.blocks) }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "disabled": true
+    },
+    {
+      "id": "outbox_outbox_11",
+      "name": "Outbox · Send approved email — DISCONNECTED",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        2950
+      ],
+      "parameters": {
+        "fromEmail": "",
+        "toEmail": "",
+        "subject": "",
+        "emailFormat": "text",
+        "text": "",
+        "options": {}
+      },
+      "disabled": true
+    },
+    {
+      "id": "outbox_outbox_12",
+      "name": "Outbox · Save approved file to folder — DISCONNECTED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1600,
+        2950
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://example.invalid/choose-cloud-folder-adapter",
+        "options": {}
+      },
+      "disabled": true
+    },
+    {
+      "id": "outbox_outbox_13",
+      "name": "Outbox · LinkedIn post / DM export — DISCONNECTED",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        2950
+      ],
+      "parameters": {},
+      "disabled": true
+    },
+    {
+      "id": "outbox_outbox_14",
+      "name": "Outbox · Stored document exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        1150
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.data.metadata?.artifact?.filename }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "outbox_outbox_15",
+      "name": "Outbox · Retrieve exact persisted artifact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1400,
+        1840
+      ],
+      "parameters": {
+        "url": "={{ \"http://comms-agent-artifacts-1:8000/artifacts/\" + encodeURIComponent($json.data.metadata.artifact.filename) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 75
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "outbox_outbox_16",
+      "name": "Outbox · Reattach verified document bytes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        1840
+      ],
+      "parameters": {
+        "jsCode": "\nreturn $input.all().map((i,index)=>{const a=i.json;const d=$('Outbox · Stored document exists?').itemMatching(index).json.data;if(a.sha256!==d.metadata.artifact.sha256)throw Error('Artifact checksum changed');return {json:{data:d},binary:{data:{data:a.base64,fileName:a.filename,mimeType:a.mime_type}}};});",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "three_11",
+      "name": "Internal · operation request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "three_12",
+      "name": "Internal · validate operation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "if($input.all().length!==1)throw Error('Use one operation envelope per execution');return $input.all().map((i,index)=>{const op=i.json._op||(typeof i.json.body==='string'?'capture':'outbox');if(![\"capture\",\"outbox\"].includes(op))throw Error('Unknown internal operation');return {json:{...i.json,_op:op},pairedItem:{item:index}};});"
+      },
+      "position": [
+        320,
+        0
+      ]
+    },
+    {
+      "id": "three_13",
+      "name": "Internal · route capture",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._op === 'capture' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        640,
+        0
+      ]
+    },
+    {
+      "id": "three_14",
+      "name": "Internal · route outbox",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._op === 'outbox' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "id": "three_15",
+      "name": "Internal · reject unknown operation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "throw Error('Unsupported operation');"
+      },
+      "position": [
+        1280,
+        0
+      ]
+    },
+    {
+      "id": "three_16",
+      "name": "Guide · capture",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "# INBOX · COLLECT → CLASSIFY → STORE\nTrusted sources feed this lane. Internal chatter is excluded and provider events are deduplicated.",
+        "width": 3000,
+        "height": 450,
+        "color": 4
+      },
+      "position": [
+        0,
+        340
+      ]
+    },
+    {
+      "id": "three_17",
+      "name": "Guide · outbox",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "# OUTBOX · PREPARE REVIEW & FILES\nHeld records and exact document bytes are reconstructed here. External delivery and schedules are disconnected.",
+        "width": 4800,
+        "height": 1200,
+        "color": 5
+      },
+      "position": [
+        0,
+        970
+      ]
+    },
+    {
+      "id": "work_worker_35",
+      "name": "Recovery · queued jobs every minute — DISABLED",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        2400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "three_18",
+      "name": "Recovery · wake main worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{json:{_op:'work'}}];"
+      },
+      "position": [
+        320,
+        2400
+      ]
+    },
+    {
+      "id": "three_19",
+      "name": "Recovery · independent main execution",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "CommsMain2026",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "position": [
+        640,
+        2400
+      ]
+    },
+    {
+      "id": "visual_overview_CommsBackend2026",
+      "name": "Visual overview · CommsBackend2026",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -310
+      ],
+      "parameters": {
+        "content": "# MAIN PATH\n**Collect → Classify → Store**   |   **Review outbox → Retrieve files**\nDisabled integrations and recovery schedules are grouped below.",
+        "width": 2800,
+        "height": 180,
+        "color": 6
+      }
+    },
+    {
+      "id": "visual_lane_CommsBackend2026_0",
+      "name": "Visual lane · JOB RECOVERY · DISABLED",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -530,
+        2350
+      ],
+      "parameters": {
+        "content": "## JOB RECOVERY · DISABLED",
+        "width": 420,
+        "height": 140,
+        "color": 6
+      }
+    },
+    {
+      "id": "visual_lane_CommsBackend2026_1",
+      "name": "Visual lane · FUTURE CONNECTIONS · DISCONNECTED",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -530,
+        2900
+      ],
+      "parameters": {
+        "content": "## FUTURE CONNECTIONS · DISCONNECTED",
+        "width": 420,
+        "height": 140,
+        "color": 6
+      }
+    }
+  ],
+  "connections": {
+    "Capture · Normalize · exclude internal · detect sent": {
+      "main": [
+        [
+          {
+            "node": "Capture · Persist idempotent inbox + style candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture · Persist idempotent inbox + style candidate": {
+      "main": [
+        [
+          {
+            "node": "Capture · Capture receipt — no heavy generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture · Manual test": {
+      "main": [
+        [
+          {
+            "node": "Capture · Example forwarded customer email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture · Example forwarded customer email": {
+      "main": [
+        [
+          {
+            "node": "Capture · Normalize · exclude internal · detect sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Manual test": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Tenant-scoped review configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Tenant-scoped review configuration": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Read held notifications and explicit actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Read held notifications and explicit actions": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Expand review items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Expand review items": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Pending draft/action exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Pending draft/action exists?": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Fetch draft and complete artifact metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Fetch draft and complete artifact metadata": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Stored document exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Stored document exists?": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Retrieve exact persisted artifact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Outbox · Build Slack review blocks + copyable text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Retrieve exact persisted artifact": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Reattach verified document bytes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Reattach verified document bytes": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Build Slack review blocks + copyable text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Every minute recovery — DISABLED until deployment": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Tenant-scoped review configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal · operation request": {
+      "main": [
+        [
+          {
+            "node": "Internal · validate operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal · validate operation": {
+      "main": [
+        [
+          {
+            "node": "Internal · route capture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal · route capture": {
+      "main": [
+        [
+          {
+            "node": "Capture · Normalize · exclude internal · detect sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Internal · route outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal · route outbox": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Tenant-scoped review configuration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Internal · reject unknown operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery · queued jobs every minute — DISABLED": {
+      "main": [
+        [
+          {
+            "node": "Recovery · wake main worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery · wake main worker": {
+      "main": [
+        [
+          {
+            "node": "Recovery · independent main execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "executionTimeout": 240,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "tags": []
+}

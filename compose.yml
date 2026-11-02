@@ -1,0 +1,38 @@
+name: comms-agent
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: comms_agent
+      POSTGRES_USER: comms_agent
+      POSTGRES_PASSWORD: ${COMMS_DB_PASSWORD:?Set a unique database password}
+    volumes:
+      - comms-postgres:/var/lib/postgresql/data
+    networks:
+      - n8n
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U comms_agent -d comms_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+  artifacts:
+    build: ./artifacts
+    restart: unless-stopped
+    environment:
+      ARTIFACT_TOKEN: ${ARTIFACT_TOKEN:?Set a unique artifact service token}
+    volumes:
+      - comms-artifacts:/data
+    networks:
+      - n8n
+    security_opt:
+      - no-new-privileges:true
+networks:
+  n8n:
+    external: true
+    name: n8n_default
+volumes:
+  comms-postgres:
+  comms-artifacts:
