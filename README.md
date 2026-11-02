@@ -9,7 +9,8 @@ A fictional-company communications assistant using three visual n8n workflows, P
 - `source/`: the workflow builder, logic, and routing code.
 - `database/` and `fixtures/`: the PostgreSQL schema and clearly labeled fictional-company data.
 - `artifacts/`: a separate PDF/PPTX generator used by document-related workflow paths.
-- `tests/`: local logic and database regression tests. [NODE-GUIDE.md](NODE-GUIDE.md) explains each workflow node.
+- `tests/`: local logic and database regression tests.
+- [Every node explained](EVERY-NODE-EXPLAINED.md): a beginner-friendly tour of each workflow node, its next step, and what has actually been tested. [NODE-GUIDE.md](NODE-GUIDE.md) is the original compact reference.
 
 ## Privacy and configuration
 
