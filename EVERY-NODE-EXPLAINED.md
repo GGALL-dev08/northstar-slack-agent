@@ -1,6 +1,6 @@
 # Northstar Relay: how the three n8n workflows work
 
-This is a guided tour of every node in the three **cloud setup snapshots** of the fictional Northstar Relay prototype. The node inventory is based on the saved `knowledge-db.json`, `backend-db.json`, and `main-db.json` cloud import files. A live canvas can be changed after these snapshots; compare disabled indicators and connections in n8n before presenting a later version.
+This is a guided tour of every node in the fictional Northstar Relay prototype. The main inventory is based on the saved cloud setup snapshots. The live third workflow also includes the ten website gateway nodes explained in the appendix. A live canvas can be changed after these snapshots; compare disabled indicators and connections in n8n before presenting a later version.
 
 ## First, the whole picture
 
@@ -16,7 +16,9 @@ Think of the system as a small communications team with a shared filing cabinet:
 
 As of the recorded November 2 cloud setup, the three workflows were **unpublished drafts** using a restricted Neon database login. Manual tests built five synthetic style profiles, ingested a synthetic event, and created an unverified, blocked synthetic email draft with a held review record. These tests did not establish an end-to-end cloud assistant, fact-checking accuracy, automatic delivery, or semantic embeddings. The local Slack direct-message prototype previously replied to a user through a **separate Socket Mode bridge**; that is not proof of an always-on cloud Slack connection. The cloud OpenRouter credential was saved, but the cloud model HTTP nodes in these snapshots were disabled. The website-to-agent connection was still unfinished at that point.
 
-**Later public demo test:** A separate, temporary copy of the main workflow was published with the ten website gateway nodes described in the appendix. In that test copy, `Chat · OpenRouter general answer` and `Work · OpenRouter — economical structured draft` were enabled. Direct gateway tests returned a natural answer to a general question and a model-generated email based on retrieved, approved synthetic facts; an incorrect gateway credential was rejected. The publicly accessible Netlify site was then tested end to end: an anonymous help request and one generated email draft both returned successfully, with synthetic retrieval and review flags. The public demo has a **shared limit of 20 chat requests per day** and a configured **$0.05 daily model cap**. These are limited demonstrations, not proof of continuous uptime, broad answer quality, or enterprise readiness. For web requests, the Joey and Mammoth checks are bypassed; the generated draft and its factual claims remain **unverified and require human review**. Model output may still contain formatting or writing imperfections. The original three setup drafts described in the tables remain unchanged and unpublished.
+**Current cloud demo:** Three workflows are visible in n8n Cloud. Fingerprints & Knowledge and Sorting & Backend remain **unpublished setup drafts**. The third is the published **COMMS 3 · Main Chat & Work — LIVE DEMO**, which includes the ten gateway nodes in the appendix. The superseded original main draft and temporary test copy were archived and remain recoverable. In the live main, the web ingress and two model nodes—`Chat · OpenRouter general answer` and `Work · OpenRouter — economical structured draft`—are enabled. Other external-integration nodes remain disabled. The generation-context Code node has web-specific prompt guidance. Execution settings are configured not to retain successful, failed or manual execution data.
+
+Direct gateway tests returned a natural answer to a general question and a model-generated email based on retrieved, approved synthetic facts; an incorrect gateway credential was rejected. The publicly accessible Netlify site was then tested end to end: an anonymous help request and one generated email draft both returned successfully, with synthetic retrieval and review flags. The public demo has a **shared limit of 20 chat requests per day** and a configured **$0.05 daily model cap**. These are limited demonstrations, not proof of continuous uptime, broad answer quality, or enterprise readiness. For web requests, the Joey and Mammoth checks are bypassed; the generated draft and its factual claims remain **unverified and require human review**. Model output may still contain formatting or writing imperfections.
 
 **Important distinction:** a database-backed dry run can demonstrate data flow without demonstrating that a language model wrote or verified the output. Style profiles measure 14 text statistics; they are not embeddings. Retrieval in this version uses PostgreSQL text/trigram search, not semantic vector search. A human must review drafts; placeholders for copy buttons, file saving and external sending are not proof those actions work.
 
@@ -36,7 +38,7 @@ As of the recorded November 2 cloud setup, the three workflows were **unpublishe
 
 **2. Sort a forwarded message.** A real future adapter or the manual example supplies an event → normalization identifies the medium, audience, and direction → the database inserts or deduplicates it → the receipt returns. Incoming and internal messages must not become approved external sent examples automatically. The email, Slack-source, and LinkedIn-source adapters are disabled in the cloud snapshot.
 
-**3. Ask for an email draft.** The main workflow obtains the request and operator policy → the parser recognizes a writing request → the database queues and claims a job → retrieval loads eligible facts and a style profile → the configured mode determines whether a model or a synthetic fixture creates a candidate → checks run → the result is saved with a held review record. In the verified cloud test this was a dry-run fixture, not a live verified model draft. The live generator and verifier nodes were disabled in the saved cloud import.
+**3. Ask for an email draft.** The main workflow obtains the request and operator policy → the parser recognizes a writing request → the database queues and claims a job → retrieval loads eligible facts and a style profile → the configured mode determines whether a model or a synthetic fixture creates a candidate → applicable checks run → the result is saved with a held review record. An earlier cloud test used a dry-run fixture; the later public-site test used live model generation with synthetic evidence. Its claims were not independently verified: Joey and Mammoth are bypassed for web requests.
 
 ## Presenting the system
 
@@ -44,7 +46,7 @@ Start with the three-workflow overview above, then follow the three examples. In
 
 ## Workflow 1 · Fingerprints & Knowledge
 
-**28 functional nodes**, 1 disabled in this cloud snapshot; 4 sticky notes.
+**28 functional nodes**, 1 disabled in this cloud setup snapshot; 4 sticky notes.
 
 | Node and type | Purpose | Next |
 |---|---|---|
@@ -88,7 +90,7 @@ These labels help orient you; they do not execute code.
 
 ## Workflow 2 · Sorting & Backend
 
-**31 functional nodes**, 11 disabled in this cloud snapshot; 5 sticky notes.
+**31 functional nodes**, 11 disabled in this cloud setup snapshot; 5 sticky notes.
 
 | Node and type | Purpose | Next |
 |---|---|---|
@@ -136,7 +138,8 @@ These labels help orient you; they do not execute code.
 
 ## Workflow 3 · Main Chat & Work
 
-**76 functional nodes**, 9 disabled in this cloud snapshot; 11 sticky notes.
+**76 functional nodes**, 9 disabled in this cloud setup snapshot; 11 sticky notes. The live published main additionally has the ten web gateway nodes described in the appendix; its two OpenRouter nodes are enabled and its generation-context instructions differ from this snapshot.
+
 
 | Node and type | Purpose | Next |
 |---|---|---|
@@ -243,13 +246,13 @@ These labels help orient you; they do not execute code.
 
 Use this guide to navigate the system and then open a node to examine its actual configuration. Treat a dated snapshot as a map, and the active n8n canvas and its execution records as the source of truth for current deployment state.
 
-## Appendix: ten proposed website gateway nodes
+## Appendix: ten website gateway nodes
 
-These ten nodes are **not part of the original three workflow snapshots** listed above. They were added to a separate temporary cloud test copy of the main workflow, which was published for bounded gateway testing. The public website's help request and one retrieval-based synthetic draft passed the limited end-to-end tests described above. The local candidate from which this appendix was derived has a disabled webhook, so its enablement indicators differ from the temporary published test copy. The candidate must not be enabled as-is: it needs proper credentials, a private server-to-server connection, deployment checks, and security testing. The design and deployed test copy may change.
+These ten nodes are **not part of the original setup snapshot** used for the main workflow table above; they are integrated into the currently published **COMMS 3 · Main Chat & Work — LIVE DEMO**. The public website's help request and one retrieval-based synthetic draft passed the limited end-to-end tests described above. The local candidate from which this appendix was derived has a disabled webhook, so its enablement indicators differ from the live published main. The candidate must not be enabled as-is: it needs proper credentials, a private server-to-server connection, deployment checks, and security testing. The live design may change.
 
 | Candidate node | Purpose and next step |
 |---|---|
-| **Web · Authenticated ingress** (Webhook, disabled in local candidate) | Receiving point for an authorized server-to-server request. The n8n webhook needs a correctly configured credential; it leads to Gate request. The separate cloud test copy uses a configured gateway credential. |
+| **Web · Authenticated ingress** (Webhook, disabled in local candidate; enabled in live main) | Receiving point for an authorized server-to-server request. The n8n webhook needs a correctly configured credential; it leads to Gate request. The live cloud workflow uses a configured gateway credential. |
 | **Web · Gate request** (Code) | Checks the incoming request shape, action and limits, and decides whether it is a health check, allowed message or blocked request. It leads to Health request?. |
 | **Web · Health request?** (IF) | Routes a health check to the database check; other requests go to Blocked request?. A health check is a connectivity check, not proof of a working model or draft. |
 | **Web · Confirm demo database** (PostgreSQL) | Queries the synthetic demo configuration to see if the database is reachable. It leads to Health response. |
